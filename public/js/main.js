@@ -1,20 +1,27 @@
-// main.js — the entry point. Wires the UI to the API and coordinates
-// the theme, search flow, and copy-address button.
-
 import { fetchBalance, fetchTransactions, fetchPrice } from './api.js';
-import { getSavedTheme, saveTheme } from './storage.js';
+import { getSavedTheme, saveTheme, getRecentSearches, addRecentSearch, clearRecentSearches } from './storage.js';
 import { 
   elements, 
   getAddressInput, 
+  setAddressInput,
   setLoading, 
   showResult, 
   showError, 
   setThemeUI, 
   toast,
-  clearResults
+  clearResults,
+  renderRecentSearches,
+  renderExampleChips
 } from './ui.js';
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
+
+// Hardcoded example chips (you can change these later)
+const EXAMPLE_ADDRESSES = [
+  { label: 'Vitalik', address: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045' },
+  { label: 'Binance 14', address: '0x28C6c06298d514Db089934071355E5743bf21d60' },
+  { label: 'Jump Trading', address: '0xf584F8728B874a6a5c7A8d4d387C9aae9172D621' }
+];
 
 let isFetching = false;
 
@@ -28,11 +35,28 @@ function initTheme() {
   });
 }
 
+// ---- Recent Searches ----
+function updateRecentUI() {
+  const list = getRecentSearches();
+  renderRecentSearches(
+    list, 
+    (addr) => {
+      setAddressInput(addr);
+      handleSearch(addr);
+    },
+    () => {
+      clearRecentSearches();
+      updateRecentUI();
+      toast('Recent searches cleared');
+    }
+  );
+}
+
 // ---- Search ----
-async function handleSearch() {
+async function handleSearch(overrideAddress = null) {
   if (isFetching) return;
 
-  const address = getAddressInput();
+  const address = overrideAddress || getAddressInput();
   if (!address) {
     showError('MISSING_ADDRESS');
     return;
@@ -42,10 +66,19 @@ async function handleSearch() {
     return;
   }
 
+  // Update UI state and URL
+  setAddressInput(address);
+  const url = new URL(window.location);
+  url.searchParams.set('address', address);
+  window.history.replaceState({}, '', url);
+
+  // Save to recent
+  addRecentSearch(address);
+  updateRecentUI();
+
   isFetching = true;
   setLoading(true);
 
-  // allSettled lets each call succeed or fail independently.
   const [balanceResult, priceResult, txResult] = await Promise.allSettled([
     fetchBalance(address),
     fetchPrice(),
@@ -55,8 +88,6 @@ async function handleSearch() {
   isFetching = false;
   setLoading(false);
 
-  // Balance is the anchor. If it failed, show the error and stop —
-  // without a balance, the page has nothing meaningful to display.
   if (balanceResult.status === 'rejected') {
     showError(balanceResult.reason.message || 'UNKNOWN_ERROR');
     return;
@@ -100,15 +131,27 @@ async function handleCopy() {
 // ---- Boot ----
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
+  updateRecentUI();
+  renderExampleChips(EXAMPLE_ADDRESSES, (addr) => {
+    setAddressInput(addr);
+    handleSearch(addr);
+  });
 
-  elements.searchBtn.addEventListener('click', handleSearch);
+  elements.searchBtn.addEventListener('click', () => handleSearch());
   elements.addressInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter' && !isFetching) handleSearch();
   });
   elements.copyBtn.addEventListener('click', handleCopy);
 
-  elements.addressInput.focus();
-
-  // Clear stale results when the user starts typing a new address.
   elements.addressInput.addEventListener('input', clearResults);
+
+  // Load address from URL on page open
+  const params = new URLSearchParams(window.location.search);
+  const urlAddress = params.get('address');
+  if (urlAddress && ADDRESS_RE.test(urlAddress)) {
+    setAddressInput(urlAddress);
+    handleSearch(urlAddress);
+  } else {
+    elements.addressInput.focus();
+  }
 });

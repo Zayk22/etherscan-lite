@@ -73,19 +73,16 @@ export default async function handler(req, res) {
   const transactions = items.map((tx) => ({
     tx_hash: tx.tx_hash || '',
     block_signed_at: tx.block_signed_at || '',
-    from_address: tx.from_address || '',
-    to_address: tx.to_address || '',
+    from_address: (tx.from_address || '').toLowerCase(),
+    to_address: (tx.to_address || '').toLowerCase(),
     value_wei: typeof tx.value === 'string' ? tx.value : '0',
     successful: Boolean(tx.successful),
-    gas_offered: tx.gas_offered ?? null,
-    gas_spent: tx.gas_spent ?? null,
-    gas_price: tx.gas_price ?? null,
-    fees_paid: tx.fees_paid ?? null,
+    fees_paid: typeof tx.fees_paid === 'string' ? tx.fees_paid : '0',
   }));
 
   return sendJson(res, 200, {
     ok: true,
-    address,
+    address: address.toLowerCase(),
     transactions,
   });
 }

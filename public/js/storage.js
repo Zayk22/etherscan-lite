@@ -1,9 +1,8 @@
-// localStorage helpers. Every call is wrapped in try/catch because:
-//   1. Private browsing (Safari) throws on localStorage access.
-//   2. Quota-exceeded errors happen.
-// Failing to save the theme is not worth crashing the app over.
+// localStorage helpers. Every call is wrapped in try/catch.
 
 const THEME_KEY = 'theme';
+const RECENT_KEY = 'recentSearches';
+const MAX_RECENT = 5;
 
 export function getSavedTheme() {
   try {
@@ -17,7 +16,32 @@ export function getSavedTheme() {
 export function saveTheme(theme) {
   try {
     localStorage.setItem(THEME_KEY, theme);
+  } catch { /* ignore */ }
+}
+
+export function getRecentSearches() {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY);
+    const list = JSON.parse(raw || '[]');
+    return Array.isArray(list) ? list.filter(s => typeof s === 'string') : [];
   } catch {
-    // Ignore — the toggle still works for this session.
+    return [];
   }
+}
+
+export function addRecentSearch(address) {
+  const clean = address.toLowerCase().trim();
+  let list = getRecentSearches().filter((a) => a !== clean);
+  list.unshift(clean);
+  list = list.slice(0, MAX_RECENT);
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+  } catch { /* ignore */ }
+  return list;
+}
+
+export function clearRecentSearches() {
+  try {
+    localStorage.removeItem(RECENT_KEY);
+  } catch { /* ignore */ }
 }

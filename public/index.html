@@ -39,6 +39,16 @@
                         <span class="loader" id="loader"></span>
                     </button>
                 </div>
+                
+                <!-- New: Example chips and Recent searches -->
+                <div class="chips-container" id="exampleChipsContainer"></div>
+                
+                <div class="recent-searches" id="recentSearchesContainer" style="display: none;">
+                    <span class="recent-label">Recent:</span>
+                    <div class="chips-container" id="recentSearchesList"></div>
+                    <button id="clearRecentBtn" class="clear-btn" title="Clear recent searches">✕</button>
+                </div>
+
                 <p class="input-hint">Enter any Ethereum wallet address to view balance, transactions & USD value</p>
             </div>
 
@@ -135,7 +145,6 @@
 
     <div id="toastContainer" class="toast-container"></div>
 
-    <!-- Hidden Aria Live Regions for Screen Readers -->
     <div id="liveRegion" aria-live="polite" class="sr-only" style="position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0;"></div>
     <div id="errorLiveRegion" aria-live="assertive" class="sr-only" style="position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0;"></div>
 
