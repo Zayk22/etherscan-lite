@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Environment variables (NEVER commit these)
+.env
+.env.local
+.env.*.local
+
+# Vercel CLI state
+.vercel/
+
+# Local backup of the original app — keep on disk, never commit
+original-backup/
+
+# OS junk
+.DS_Store
+Thumbs.db
