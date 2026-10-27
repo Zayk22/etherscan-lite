@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- Fixed viewport: removed maximum-scale so users can zoom -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Ethereum Blockchain Explorer - Check balances, transactions, and USD values">
+    <title>EtherScan Lite | Blockchain Explorer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="theme-toggle-wrapper">
+        <button id="themeToggle" class="theme-toggle" aria-label="Toggle theme">
+            <span class="theme-icon">🌙</span>
+        </button>
+    </div>
+
+    <div class="container">
+        <div class="explorer-card" id="explorerCard">
+            <div class="card-header">
+                <div class="icon-wrapper">
+                    <svg class="blockchain-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <h1 class="title">EtherScan <span class="highlight">Lite</span></h1>
+                <p class="subtitle">Ethereum blockchain explorer – balances, transactions & USD value</p>
+            </div>
+
+            <div class="search-section">
+                <div class="input-group">
+                    <input type="text" id="addressInput" class="address-input" placeholder="Enter Ethereum address (0x...)" autocomplete="off" spellcheck="false">
+                    <button id="searchBtn" class="search-btn">
+                        <span class="btn-text">Search</span>
+                        <span class="loader" id="loader"></span>
+                    </button>
+                </div>
+                <p class="input-hint">Enter any Ethereum wallet address to view balance, transactions & USD value</p>
+            </div>
+
+            <div class="result-container" id="resultContainer">
+                <!-- Placeholder (initial) -->
+                <div class="result-placeholder" id="resultPlaceholder">
+                    <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <p>Enter an address to view balance</p>
+                </div>
+
+                <!-- Actual result content (initially hidden) -->
+                <div class="result-content" id="resultContent" style="display: none;">
+                    <!-- Skeleton loaders -->
+                    <div id="balanceSkeleton" class="skeleton-balance" style="display: none;">
+                        <div class="balance-card">
+                            <div class="balance-item">
+                                <span class="balance-label">Balance (ETH)</span>
+                                <div class="balance-value shimmer" style="width: 150px; height: 40px; margin: 0 auto;"></div>
+                            </div>
+                            <div class="balance-item">
+                                <span class="balance-label">USD Value</span>
+                                <div class="balance-value shimmer" style="width: 120px; height: 40px; margin: 0 auto;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="transactionsSkeleton" class="skeleton-transactions" style="display: none;">
+                        <div class="section-title">📜 Transaction History</div>
+                        <div class="transactions-list">
+                            <div class="skeleton-item shimmer"></div>
+                            <div class="skeleton-item shimmer"></div>
+                            <div class="skeleton-item shimmer"></div>
+                            <div class="skeleton-item shimmer"></div>
+                            <div class="skeleton-item shimmer"></div>
+                        </div>
+                    </div>
+
+                    <!-- Real data (initially hidden) -->
+                    <div id="realData" style="display: none;">
+                        <div class="result-header">
+                            <span class="result-label">Wallet Address</span>
+                            <div class="address-wrapper">
+                                <span class="result-address" id="walletAddress"></span>
+                                <button class="copy-btn" id="copyBtn" title="Copy address">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M16 1H4C2.9 1 2 1.9 2 3V17H4V3H16V1ZM19 5H8C6.9 5 6 5.9 6 7V21C6 22.1 6.9 23 8 23H19C20.1 23 21 22.1 21 21V7C21 5.9 20.1 5 19 5ZM19 21H8V7H19V21Z" fill="currentColor"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="balance-section">
+                            <div class="balance-card">
+                                <div class="balance-item">
+                                    <span class="balance-label">Balance (ETH)</span>
+                                    <div class="balance-value">
+                                        <span id="balanceAmount">0.00</span>
+                                        <span class="balance-unit">ETH</span>
+                                    </div>
+                                </div>
+                                <div class="balance-item">
+                                    <span class="balance-label">USD Value</span>
+                                    <div class="balance-value usd-value">
+                                        <span id="usdAmount">$0.00</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="transactions-section">
+                            <h3 class="section-title">
+                                <span>📜 Transaction History</span>
+                                <a href="#" id="etherscanLink" class="etherscan-link" target="_blank">View on Etherscan →</a>
+                            </h3>
+                            <div id="transactionsList" class="transactions-list"></div>
+                            <div id="transactionsEmpty" class="transactions-empty" style="display: none;">No transactions found for this address.</div>
+                        </div>
+                        <div class="result-footer">
+                            <span class="powered-by">Powered by Covalent & CoinGecko | Real‑time Ethereum data</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Aria live region for errors -->
+                <div class="error-message" id="errorMessage" style="display: none;" role="alert" aria-live="assertive">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 8V12M12 16H12.01M3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    <span id="errorText"></span>
+                </div>
+            </div>
+
+            <div class="card-footer">
+                <p>🔍 Supports Ethereum Mainnet | Transactions & balance via Covalent API</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Load the app as an ES module -->
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
