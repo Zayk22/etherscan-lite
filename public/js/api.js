@@ -5,21 +5,13 @@ async function getJson(url) {
   } catch {
     throw new Error('NETWORK_ERROR');
   }
-
   let body = null;
-  try {
-    body = await response.json();
-  } catch {
-    // Ignore non-JSON responses.
-  }
-
+  try { body = await response.json(); } catch { /* ignore */ }
   if (!response.ok) {
     const code = body && typeof body.error === 'string' ? body.error : 'UPSTREAM_ERROR';
     throw new Error(code);
   }
-  if (!body || body.ok !== true) {
-    throw new Error('UPSTREAM_ERROR');
-  }
+  if (!body || body.ok !== true) throw new Error('UPSTREAM_ERROR');
   return body;
 }
 
@@ -35,4 +27,8 @@ export async function fetchTransactions(address, limit = 10, page = 0) {
 
 export async function fetchPrice() {
   return getJson('/api/price');
+}
+
+export async function fetchResolve(name) {
+  return getJson(`/api/resolve?name=${encodeURIComponent(name)}`);
 }

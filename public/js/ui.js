@@ -8,6 +8,8 @@ const els = {
   errorMessage: document.getElementById('errorMessage'),
   errorText: document.getElementById('errorText'),
   walletAddress: document.getElementById('walletAddress'),
+  resolvedName: document.getElementById('resolvedName'),
+  resolvedAddressText: document.getElementById('resolvedAddressText'),
   balanceAmount: document.getElementById('balanceAmount'),
   usdAmount: document.getElementById('usdAmount'),
   copyBtn: document.getElementById('copyBtn'),
@@ -54,7 +56,7 @@ function announce(message, region) {
   if (region) region.textContent = message;
 }
 
-export function setLoading(isLoading) {
+export function setLoading(isLoading, message = 'Loading data...') {
   els.searchBtn.disabled = isLoading;
   els.searchBtn.classList.toggle('loading', isLoading);
 
@@ -65,12 +67,24 @@ export function setLoading(isLoading) {
     els.realData.style.display = 'none';
     els.balanceSkeleton.style.display = 'block';
     els.transactionsSkeleton.style.display = 'block';
-    announce('Loading data...', els.liveRegion);
+    announce(message, els.liveRegion);
   }
 }
 
-export function showResult({ address, ethWei, ethUsd, priceError, tokens }) {
-  els.walletAddress.textContent = address;
+export function showResult({ address, ethName, ethWei, ethUsd, priceError, tokens }) {
+  // Setup Header
+  if (ethName) {
+    els.resolvedName.style.display = 'block';
+    els.resolvedName.textContent = ethName;
+    els.resolvedAddressText.style.display = 'block';
+    els.resolvedAddressText.textContent = address;
+    els.walletAddress.textContent = ethName; // Keep primary bold text as the name
+  } else {
+    els.resolvedName.style.display = 'none';
+    els.resolvedAddressText.style.display = 'none';
+    els.walletAddress.textContent = address;
+  }
+
   els.etherscanLink.href = `https://etherscan.io/address/${address}`;
 
   const ethString = weiToEth(ethWei, 6);
@@ -102,7 +116,6 @@ function renderTokens(tokens) {
   els.tokensSection.style.display = 'block';
   els.tokensList.replaceChildren();
 
-  // Show top 8 tokens only
   const MAX_TOKENS = 8;
   const displayTokens = tokens.slice(0, MAX_TOKENS);
 
@@ -123,7 +136,6 @@ function renderTokens(tokens) {
     els.tokensList.appendChild(row);
   });
 
-  // If there are more than 8, show a message
   if (tokens.length > MAX_TOKENS) {
     const more = document.createElement('div');
     more.className = 'token-more';
@@ -208,16 +220,10 @@ function buildTransactionCard(tx, searchedAddress) {
   let iconPaths, iconColorClass, labelText;
 
   if (direction === 'IN') {
-    iconPaths = [
-      { name: 'path', attrs: { d: 'M17 7 7 17' } },
-      { name: 'path', attrs: { d: 'M17 17H7V7' } }
-    ];
+    iconPaths = [{ name: 'path', attrs: { d: 'M17 7 7 17' } }, { name: 'path', attrs: { d: 'M17 17H7V7' } }];
     iconColorClass = 'tx-in'; labelText = 'IN';
   } else if (direction === 'OUT') {
-    iconPaths = [
-      { name: 'path', attrs: { d: 'M7 7h10v10' } },
-      { name: 'path', attrs: { d: 'M7 17 17 7' } }
-    ];
+    iconPaths = [{ name: 'path', attrs: { d: 'M7 7h10v10' } }, { name: 'path', attrs: { d: 'M7 17 17 7' } }];
     iconColorClass = 'tx-out'; labelText = 'OUT';
   } else {
     iconPaths = [
@@ -340,7 +346,7 @@ export function renderRecentSearches(list, onSelect, onClear) {
   list.forEach(address => {
     const btn = document.createElement('button');
     btn.className = 'chip-btn';
-    btn.textContent = shortenHex(address, 6, 4);
+    btn.textContent = address.endsWith('.eth') ? address : shortenHex(address, 6, 4);
     btn.title = address;
     btn.addEventListener('click', () => onSelect(address));
     els.recentSearchesList.appendChild(btn);

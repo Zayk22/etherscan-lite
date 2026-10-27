@@ -30,9 +30,11 @@ export default async function handler(req, res) {
     return sendError(res, 500, 'MISSING_API_KEY');
   }
 
-  const url =
-    `${UPSTREAM}/${address}/transactions_v2/` +
-    `?key=${encodeURIComponent(key)}&limit=${limit}&page-number=${page}`;
+  // Build URL safely. Only append page-number if page > 0 to avoid Covalent hangs.
+  let url = `${UPSTREAM}/${address}/transactions_v2/?key=${encodeURIComponent(key)}&limit=${limit}`;
+  if (page > 0) {
+    url += `&page-number=${page}`;
+  }
 
   let upstream;
   try {
@@ -79,7 +81,6 @@ export default async function handler(req, res) {
     fees_paid: typeof tx.fees_paid === 'string' ? tx.fees_paid : '0',
   }));
 
-  // `has_more` tells the frontend whether to show the Load More button.
   const hasMore = Boolean(body && body.data && body.data.pagination && body.data.pagination.has_more);
 
   return sendJson(res, 200, {

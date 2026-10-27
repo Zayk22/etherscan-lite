@@ -2,24 +2,15 @@ const WEI_PER_ETH = 1000000000000000000n;
 
 export function weiToEth(weiString, maxFractionDigits = 6) {
   let wei;
-  try {
-    wei = BigInt(weiString);
-  } catch {
-    return '0';
-  }
-
+  try { wei = BigInt(weiString); } catch { return '0'; }
   const negative = wei < 0n;
   if (negative) wei = -wei;
-
   const whole = wei / WEI_PER_ETH;
   const remainder = wei % WEI_PER_ETH;
-
   const remainderStr = remainder.toString().padStart(18, '0');
   let fraction = remainderStr.slice(0, maxFractionDigits);
-
   fraction = fraction.replace(/0+$/, '');
   if (fraction === '') fraction = '0';
-
   const sign = negative ? '-' : '';
   return `${sign}${whole.toString()}.${fraction}`;
 }
@@ -29,9 +20,7 @@ export function ethToUsd(ethDecimalString, usdPerEth) {
   const usd = eth * usdPerEth;
   if (!Number.isFinite(usd)) return 'Price unavailable';
   return usd.toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2,
+    style: 'currency', currency: 'USD', maximumFractionDigits: 2,
   });
 }
 
@@ -47,12 +36,26 @@ export function formatDate(isoString) {
   return d.toLocaleString();
 }
 
+export function isEthName(value) {
+  return typeof value === 'string' && /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.eth$/i.test(value.trim());
+}
+
 export function errorMessage(code) {
   switch (code) {
     case 'INVALID_ADDRESS':
       return 'Invalid address format. Ethereum addresses start with 0x and have 40 hex characters.';
     case 'MISSING_ADDRESS':
-      return 'Please enter an Ethereum address.';
+      return 'Please enter an Ethereum address or .eth name.';
+    case 'MISSING_NAME':
+      return 'Please enter a .eth name.';
+    case 'INVALID_NAME':
+      return 'Invalid .eth name. Use lowercase letters, digits and hyphens, ending in .eth.';
+    case 'NAME_NOT_FOUND':
+      return 'That .eth name could not be resolved to a wallet address.';
+    case 'KEY_REJECTED':
+      return 'The data provider rejected the API key. Please try again later.';
+    case 'RESOLVER_UNAVAILABLE':
+      return 'The .eth name resolver is temporarily unavailable. Please try again.';
     case 'RATE_LIMIT':
       return 'Rate limit exceeded. Please wait a moment and try again.';
     case 'TIMEOUT':
@@ -67,17 +70,12 @@ export function errorMessage(code) {
   }
 }
 
-/**
- * Determine if a transaction is IN, OUT, or SELF relative to a searched address.
- */
 export function getDirection(tx, searchedAddress) {
   const from = tx.from_address.toLowerCase();
   const to = tx.to_address.toLowerCase();
   const self = searchedAddress.toLowerCase();
-
   if (from === self && to === self) return 'SELF';
   if (from === self) return 'OUT';
   if (to === self) return 'IN';
-  // Fallback (e.g., contract interactions)
   return 'UNKNOWN';
 }

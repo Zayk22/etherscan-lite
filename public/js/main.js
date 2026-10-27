@@ -1,5 +1,6 @@
-import { fetchBalance, fetchTransactions, fetchPrice } from './api.js';
+import { fetchBalance, fetchTransactions, fetchPrice, fetchResolve } from './api.js';
 import { getSavedTheme, saveTheme, getRecentSearches, addRecentSearch, clearRecentSearches } from './storage.js';
+import { isEthName } from './format.js';
 import { 
   elements, 
   getAddressInput, 
@@ -22,13 +23,14 @@ import {
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 
 const EXAMPLE_ADDRESSES = [
-  { label: 'Vitalik', address: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045' },
+  { label: 'Vitalik', address: 'vitalik.eth' },
   { label: 'Binance 14', address: '0x28C6c06298d514Db089934071355E5743bf21d60' },
   { label: 'Jump Trading', address: '0xf584F8728B874a6a5c7A8d4d387C9aae9172D621' }
 ];
 
 let isFetching = false;
 let currentAddress = '';
+let currentEthName = null;
 let currentEthWei = '0';
 let currentEthUsd = null;
 let currentTransactions = [];
@@ -36,7 +38,6 @@ let currentPage = 0;
 let hasMore = false;
 let currentFilter = 'all';
 
-// ---- Theme ----
 function initTheme() {
   setThemeUI(getSavedTheme());
   elements.themeToggle.addEventListener('click', () => {
@@ -46,14 +47,13 @@ function initTheme() {
   });
 }
 
-// ---- Recent Searches ----
 function updateRecentUI() {
   const list = getRecentSearches();
   renderRecentSearches(
     list, 
-    (addr) => {
-      setAddressInput(addr);
-      handleSearch(addr);
+    (query) => {
+      setAddressInput(query);
+      handleSearch(query);
     },
     () => {
       clearRecentSearches();
@@ -63,39 +63,71 @@ function updateRecentUI() {
   );
 }
 
-// ---- Search ----
-async function handleSearch(overrideAddress = null) {
+// Helper to prevent any promise from hanging forever
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), ms))
+  ]);
+}
+
+async function handleSearch(overrideInput = null) {
   if (isFetching) return;
 
-  const address = overrideAddress || getAddressInput();
-  if (!address) return showError('MISSING_ADDRESS');
-  if (!ADDRESS_RE.test(address)) return showError('INVALID_ADDRESS');
+  const input = overrideInput || getAddressInput();
+  if (!input) return showError('MISSING_ADDRESS');
 
-  // Update UI state and URL
-  setAddressInput(address);
+  const isName = isEthName(input);
+  const isAddress = ADDRESS_RE.test(input);
+
+  if (!isName && !isAddress) {
+    return showError('INVALID_ADDRESS');
+  }
+
+  setAddressInput(input);
+  
+  isFetching = true;
+  let resolvedAddress = input;
+
+  // Step 1: Resolve .eth names
+  if (isName) {
+    setLoading(true, 'Resolving name...');
+    try {
+      const resolveData = await fetchResolve(input);
+      resolvedAddress = resolveData.address;
+      currentEthName = input.toLowerCase();
+    } catch (err) {
+      isFetching = false;
+      setLoading(false);
+      return showError(err.message || 'RESOLVER_UNAVAILABLE');
+    }
+  } else {
+    currentEthName = null;
+  }
+
+  // Step 2: Save to recent & Update URL
+  addRecentSearch(input);
+  updateRecentUI();
+  
   const url = new URL(window.location);
-  url.searchParams.set('address', address);
+  url.searchParams.set('address', input);
   window.history.replaceState({}, '', url);
 
-  // Save to recent
-  addRecentSearch(address);
-  updateRecentUI();
-
   // Reset state
-  currentAddress = address.toLowerCase();
+  currentAddress = resolvedAddress.toLowerCase();
   currentPage = 0;
   currentTransactions = [];
   currentFilter = 'all';
   hasMore = false;
   setFilterUI('all');
 
-  isFetching = true;
-  setLoading(true);
+  setLoading(true, 'Loading data...');
 
+  // Step 3: Fetch everything. We wrap transactions in a timeout so if it hangs, the page still loads.
   const [balanceResult, priceResult, txResult] = await Promise.allSettled([
-    fetchBalance(address),
+    fetchBalance(currentAddress),
     fetchPrice(),
-    fetchTransactions(address, 10, 0),
+    withTimeout(fetchTransactions(currentAddress, 10, 0), 6000) // 6 second limit
   ]);
 
   isFetching = false;
@@ -107,7 +139,7 @@ async function handleSearch(overrideAddress = null) {
   }
 
   const balanceData = balanceResult.value;
-  const txData = txResult.status === 'fulfilled' ? txResult.value : { transactions: [], hasMore: false };
+  const txData = txResult.status === 'fulfilled' ? txResult.value : { transactions: [], hasMore: true };
   const priceData = priceResult.status === 'fulfilled' ? priceResult.value : null;
 
   currentEthWei = balanceData.eth_wei;
@@ -116,7 +148,8 @@ async function handleSearch(overrideAddress = null) {
   hasMore = txData.hasMore;
 
   showResult({
-    address: balanceData.address,
+    address: currentAddress,
+    ethName: currentEthName,
     ethWei: currentEthWei,
     ethUsd: currentEthUsd,
     priceError: priceData === null,
@@ -131,17 +164,15 @@ async function handleSearch(overrideAddress = null) {
   });
 }
 
-// ---- Load More ----
 async function handleLoadMore() {
   if (isFetching || !hasMore) return;
   
   isFetching = true;
   setLoadMoreLoading(true);
-
   currentPage++;
   
   try {
-    const txData = await fetchTransactions(currentAddress, 10, currentPage);
+    const txData = await withTimeout(fetchTransactions(currentAddress, 10, currentPage), 6000);
     currentTransactions = [...currentTransactions, ...txData.transactions];
     hasMore = txData.hasMore;
 
@@ -153,14 +184,13 @@ async function handleLoadMore() {
     });
   } catch (err) {
     toast('Failed to load more transactions');
-    currentPage--; // Revert page so retry works
+    currentPage--;
   } finally {
     isFetching = false;
     setLoadMoreLoading(false);
   }
 }
 
-// ---- Filter ----
 function handleFilterChange(newFilter) {
   currentFilter = newFilter;
   renderTransactions({
@@ -171,16 +201,14 @@ function handleFilterChange(newFilter) {
   });
 }
 
-// ---- Copy address ----
 async function handleCopy() {
-  const address = elements.walletAddress.textContent;
-  if (!address || !ADDRESS_RE.test(address)) return;
+  if (!currentAddress) return;
   try {
-    await navigator.clipboard.writeText(address);
+    await navigator.clipboard.writeText(currentAddress);
     toast('✅ Address copied!');
   } catch {
     const ta = document.createElement('textarea');
-    ta.value = address;
+    ta.value = currentAddress;
     document.body.appendChild(ta);
     ta.select();
     try {
@@ -193,7 +221,6 @@ async function handleCopy() {
   }
 }
 
-// ---- Boot ----
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   updateRecentUI();
@@ -209,14 +236,12 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.copyBtn.addEventListener('click', handleCopy);
   elements.addressInput.addEventListener('input', clearResults);
 
-  // Phase 4 bindings
   bindFilterButtons(handleFilterChange);
   bindLoadMore(handleLoadMore);
 
-  // Load address from URL on page open
   const params = new URLSearchParams(window.location.search);
   const urlAddress = params.get('address');
-  if (urlAddress && ADDRESS_RE.test(urlAddress)) {
+  if (urlAddress && (ADDRESS_RE.test(urlAddress) || isEthName(urlAddress))) {
     setAddressInput(urlAddress);
     handleSearch(urlAddress);
   } else {
