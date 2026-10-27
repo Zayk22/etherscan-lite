@@ -1,4 +1,4 @@
-import { fetchBalance, fetchTransactions, fetchPrice, fetchResolve } from './api.js';
+import { fetchBalance, fetchTokens, fetchTransactions, fetchPrice, fetchResolve } from './api.js';
 import { getSavedTheme, saveTheme, getRecentSearches, addRecentSearch, clearRecentSearches } from './storage.js';
 import { isEthName } from './format.js';
 import { 
@@ -17,7 +17,9 @@ import {
   toast,
   clearResults,
   renderRecentSearches,
-  renderExampleChips
+  renderExampleChips,
+  showSectionError, // New UI function we'll add in Batch 3
+  renderTokens        // New UI function
 } from './ui.js';
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
@@ -37,6 +39,9 @@ let currentTransactions = [];
 let currentPage = 0;
 let hasMore = false;
 let currentFilter = 'all';
+
+// Search ID counter for ignoring stale requests
+let currentSearchId = 0;
 
 function initTheme() {
   setThemeUI(getSavedTheme());
@@ -63,13 +68,6 @@ function updateRecentUI() {
   );
 }
 
-function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), ms))
-  ]);
-}
-
 async function handleSearch(overrideInput = null) {
   if (isFetching) return;
 
@@ -83,23 +81,33 @@ async function handleSearch(overrideInput = null) {
 
   setAddressInput(input);
   
+  // Increment search ID and cancel old requests
+  currentSearchId++;
+  const searchId = currentSearchId;
+  
   isFetching = true;
   let resolvedAddress = input;
+
+  const resolveController = new AbortController();
+  const resolveTimer = setTimeout(() => resolveController.abort(), 8000);
 
   if (isName) {
     setLoading(true, 'Resolving name...');
     try {
-      const resolveData = await withTimeout(fetchResolve(input), 6000);
+      const resolveData = await fetchResolve(input, resolveController.signal);
       resolvedAddress = resolveData.address;
       currentEthName = input.toLowerCase();
     } catch (err) {
       isFetching = false;
       setLoading(false);
+      clearTimeout(resolveTimer);
+      if (err.message === 'ABORTED') return showError('UPSTREAM_TIMEOUT');
       return showError(err.message || 'RESOLVER_UNAVAILABLE');
     }
   } else {
     currentEthName = null;
   }
+  clearTimeout(resolveTimer);
 
   addRecentSearch(input);
   updateRecentUI();
@@ -114,63 +122,85 @@ async function handleSearch(overrideInput = null) {
   currentFilter = 'all';
   hasMore = false;
   setFilterUI('all');
+  
+  currentEthWei = '0';
+  currentEthUsd = null;
 
   setLoading(true, 'Loading data...');
+  isFetching = false; // Allow the UI to be responsive while sections load
 
-  // Fetch independently. If balance fails, transactions can still succeed.
-  let balanceData = null;
-  let txData = { transactions: [], hasMore: false };
-  let priceData = null;
+  // 1. Fetch Balance (Independent)
+  const balanceController = new AbortController();
+  const balanceTimer = setTimeout(() => balanceController.abort(), 8000);
+  fetchBalance(currentAddress, balanceController.signal)
+    .then(data => {
+      if (searchId !== currentSearchId) return;
+      currentEthWei = data.eth_wei;
+      showResult({ address: currentAddress, ethName: currentEthName, ethWei: currentEthWei, ethUsd: currentEthUsd, priceError: currentEthUsd === null });
+    })
+    .catch(err => {
+      if (searchId !== currentSearchId) return;
+      if (err.message === 'ABORTED') showSectionError('balance', 'Timed out');
+      else showSectionError('balance', err.message);
+    })
+    .finally(() => {
+      clearTimeout(balanceTimer);
+      if (searchId === currentSearchId) hideSkeleton('balance');
+    });
 
-  try {
-    const results = await withTimeout(
-      Promise.allSettled([
-        fetchBalance(currentAddress),
-        fetchPrice(),
-        fetchTransactions(currentAddress, 10, 0)
-      ]), 
-      9000 // 9 seconds max total
-    );
+  // 2. Fetch Price (Independent)
+  const priceController = new AbortController();
+  const priceTimer = setTimeout(() => priceController.abort(), 8000);
+  fetchPrice(priceController.signal)
+    .then(data => {
+      if (searchId !== currentSearchId) return;
+      currentEthUsd = data.eth_usd;
+      showResult({ address: currentAddress, ethName: currentEthName, ethWei: currentEthWei, ethUsd: currentEthUsd, priceError: false });
+    })
+    .catch(err => {
+      if (searchId !== currentSearchId) return;
+      currentEthUsd = null;
+      showResult({ address: currentAddress, ethName: currentEthName, ethWei: currentEthWei, ethUsd: null, priceError: true });
+    })
+    .finally(() => {
+      clearTimeout(priceTimer);
+    });
 
-    if (results[0].status === 'fulfilled') balanceData = results[0].value;
-    if (results[1].status === 'fulfilled') priceData = results[1].value;
-    if (results[2].status === 'fulfilled') txData = results[2].value;
+  // 3. Fetch Transactions (Independent)
+  const txController = new AbortController();
+  const txTimer = setTimeout(() => txController.abort(), 10000);
+  fetchTransactions(currentAddress, 10, 0, txController.signal)
+    .then(data => {
+      if (searchId !== currentSearchId) return;
+      currentTransactions = data.transactions;
+      hasMore = data.hasMore;
+      renderTransactions({ transactions: currentTransactions, filter: currentFilter, address: currentAddress, hasMore: hasMore });
+    })
+    .catch(err => {
+      if (searchId !== currentSearchId) return;
+      showSectionError('transactions', err.message);
+    })
+    .finally(() => {
+      clearTimeout(txTimer);
+      if (searchId === currentSearchId) hideSkeleton('transactions');
+    });
 
-  } catch (err) {
-    // If the whole thing times out, we might still have partial data, but usually we lose it all.
-    console.warn("Global fetch timeout reached.");
-  }
-
-  isFetching = false;
-  setLoading(false);
-
-  // If BOTH balance and transactions failed, show the error.
-  if (!balanceData && txData.transactions.length === 0) {
-    return showError('TIMEOUT');
-  }
-
-  // Otherwise, show whatever we got.
-  currentEthWei = balanceData ? balanceData.eth_wei : '0';
-  currentEthUsd = priceData ? priceData.eth_usd : null;
-  currentTransactions = txData.transactions;
-  hasMore = txData.hasMore;
-
-  // If balance failed, pass a flag so ui.js knows to show "Unavailable"
-  showResult({
-    address: currentAddress,
-    ethName: currentEthName,
-    ethWei: currentEthWei,
-    ethUsd: currentEthUsd,
-    priceError: priceData === null || !balanceData, 
-    tokens: balanceData ? balanceData.tokens : [],
-  });
-
-  renderTransactions({
-    transactions: currentTransactions,
-    filter: currentFilter,
-    address: currentAddress,
-    hasMore: hasMore,
-  });
+  // 4. Fetch Tokens (Independent)
+  const tokenController = new AbortController();
+  const tokenTimer = setTimeout(() => tokenController.abort(), 12000);
+  fetchTokens(currentAddress, tokenController.signal)
+    .then(data => {
+      if (searchId !== currentSearchId) return;
+      renderTokens(data.tokens);
+    })
+    .catch(err => {
+      if (searchId !== currentSearchId) return;
+      showSectionError('tokens', err.message);
+    })
+    .finally(() => {
+      clearTimeout(tokenTimer);
+      if (searchId === currentSearchId) hideSkeleton('tokens');
+    });
 }
 
 async function handleLoadMore() {
@@ -180,8 +210,11 @@ async function handleLoadMore() {
   setLoadMoreLoading(true);
   currentPage++;
   
+  const txController = new AbortController();
+  const txTimer = setTimeout(() => txController.abort(), 10000);
+
   try {
-    const txData = await withTimeout(fetchTransactions(currentAddress, 10, currentPage), 8000);
+    const txData = await fetchTransactions(currentAddress, 10, currentPage, txController.signal);
     currentTransactions = [...currentTransactions, ...txData.transactions];
     hasMore = txData.hasMore;
 
@@ -195,6 +228,7 @@ async function handleLoadMore() {
     toast('Failed to load more transactions');
     currentPage--;
   } finally {
+    clearTimeout(txTimer);
     isFetching = false;
     setLoadMoreLoading(false);
   }

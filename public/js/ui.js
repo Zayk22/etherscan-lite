@@ -16,9 +16,6 @@ const els = {
   transactionsList: document.getElementById('transactionsList'),
   transactionsEmpty: document.getElementById('transactionsEmpty'),
   etherscanLink: document.getElementById('etherscanLink'),
-  balanceSkeleton: document.getElementById('balanceSkeleton'),
-  transactionsSkeleton: document.getElementById('transactionsSkeleton'),
-  realData: document.getElementById('realData'),
   themeToggle: document.getElementById('themeToggle'),
   themeIcon: document.querySelector('.theme-icon'),
   toastContainer: document.getElementById('toastContainer'),
@@ -28,11 +25,29 @@ const els = {
   recentSearchesList: document.getElementById('recentSearchesList'),
   clearRecentBtn: document.getElementById('clearRecentBtn'),
   exampleChipsContainer: document.getElementById('exampleChipsContainer'),
+  
+  // Phase 6: Independent sections
   tokensSection: document.getElementById('tokensSection'),
   tokensList: document.getElementById('tokensList'),
   filterButtons: document.querySelectorAll('.filter-btn'),
   loadMoreBtn: document.getElementById('loadMoreBtn'),
   loadMoreContainer: document.getElementById('loadMoreContainer'),
+
+  // Skeletons & Error containers
+  balanceSkeleton: document.getElementById('balanceSkeleton'),
+  balanceData: document.getElementById('balanceData'),
+  balanceError: document.getElementById('balanceError'),
+  balanceRetryBtn: document.getElementById('balanceRetryBtn'),
+
+  transactionsSkeleton: document.getElementById('transactionsSkeleton'),
+  transactionsData: document.getElementById('transactionsData'),
+  transactionsError: document.getElementById('transactionsError'),
+  transactionsRetryBtn: document.getElementById('transactionsRetryBtn'),
+
+  tokensSkeleton: document.getElementById('tokensSkeleton'),
+  tokensData: document.getElementById('tokensData'),
+  tokensError: document.getElementById('tokensError'),
+  tokensRetryBtn: document.getElementById('tokensRetryBtn'),
 };
 
 export function getAddressInput() { return els.addressInput.value.trim(); }
@@ -52,57 +67,58 @@ function announce(message, region) { if (region) region.textContent = message; }
 export function setLoading(isLoading, message = 'Loading data...') {
   els.searchBtn.disabled = isLoading;
   els.searchBtn.classList.toggle('loading', isLoading);
+  
   if (isLoading) {
     els.resultPlaceholder.style.display = 'none';
     els.errorMessage.style.display = 'none';
     els.resultContent.style.display = 'block';
-    els.realData.style.display = 'none';
+    els.realData.style.display = 'block';
+    
+    // Reset sections
     els.balanceSkeleton.style.display = 'block';
+    els.balanceData.style.display = 'none';
+    els.balanceError.style.display = 'none';
+
     els.transactionsSkeleton.style.display = 'block';
+    els.transactionsData.style.display = 'none';
+    els.transactionsError.style.display = 'none';
+
+    els.tokensSkeleton.style.display = 'block';
+    els.tokensData.style.display = 'none';
+    els.tokensError.style.display = 'none';
+
+    els.resultContent.style.display = 'block';
     announce(message, els.liveRegion);
   }
 }
 
-export function showResult({ address, ethName, ethWei, ethUsd, priceError, tokens }) {
+// Balance Rendering
+export function showResult({ address, ethName, ethWei, ethUsd, priceError }) {
   if (ethName) {
+    els.walletAddress.textContent = ethName;
     els.resolvedName.style.display = 'block';
-    els.resolvedName.textContent = ethName;
     els.resolvedAddressText.style.display = 'block';
     els.resolvedAddressText.textContent = address;
-    els.walletAddress.textContent = ethName;
   } else {
+    els.walletAddress.textContent = address;
     els.resolvedName.style.display = 'none';
     els.resolvedAddressText.style.display = 'none';
-    els.walletAddress.textContent = address;
   }
 
   els.etherscanLink.href = `https://etherscan.io/address/${address}`;
 
-  if (priceError && ethWei === '0') {
-    // Balance failed or is too slow to load
-    els.balanceAmount.textContent = 'Unavailable';
-    els.usdAmount.textContent = 'Unavailable';
+  const ethString = weiToEth(ethWei, 6);
+  els.balanceAmount.textContent = ethString;
+
+  if (priceError || ethUsd == null) {
+    els.usdAmount.textContent = 'Price unavailable';
   } else {
-    const ethString = weiToEth(ethWei, 6);
-    els.balanceAmount.textContent = ethString;
-    if (priceError || ethUsd == null) {
-      els.usdAmount.textContent = 'Price unavailable';
-    } else {
-      els.usdAmount.textContent = ethToUsd(ethString, ethUsd);
-    }
+    els.usdAmount.textContent = ethToUsd(ethString, ethUsd);
   }
-
-  renderTokens(tokens || []);
-
-  els.balanceSkeleton.style.display = 'none';
-  els.transactionsSkeleton.style.display = 'none';
-  els.realData.style.display = 'block';
-  els.resultPlaceholder.style.display = 'none';
-  els.errorMessage.style.display = 'none';
-  els.resultContent.style.display = 'block';
 }
 
-function renderTokens(tokens) {
+// Tokens Rendering
+export function renderTokens(tokens) {
   if (!tokens || tokens.length === 0) {
     els.tokensSection.style.display = 'none';
     return;
@@ -135,6 +151,7 @@ function renderTokens(tokens) {
   }
 }
 
+// Transactions Rendering
 export function renderTransactions({ transactions, filter, address, hasMore }) {
   const filtered = transactions.filter((tx) => {
     if (filter === 'all') return true;
@@ -180,18 +197,55 @@ export function setFilterUI(filter) {
   });
 }
 
+// Phase 6: Independent Sections
+export function hideSkeleton(section) {
+  if (section === 'balance') els.balanceSkeleton.style.display = 'none';
+  if (section === 'transactions') els.transactionsSkeleton.style.display = 'none';
+  if (section === 'tokens') els.tokensSkeleton.style.display = 'none';
+}
+
+export function showSectionError(section, message) {
+  const text = errorMessage(message);
+  if (section === 'balance') {
+    els.balanceData.style.display = 'none';
+    els.balanceError.style.display = 'flex';
+    document.getElementById('balanceErrorText').textContent = text;
+  }
+  if (section === 'transactions') {
+    els.transactionsData.style.display = 'none';
+    els.transactionsError.style.display = 'flex';
+    document.getElementById('transactionsErrorText').textContent = text;
+  }
+  if (section === 'tokens') {
+    els.tokensData.style.display = 'none';
+    els.tokensError.style.display = 'flex';
+    document.getElementById('tokensErrorText').textContent = text;
+  }
+}
+
+export function showSectionSuccess(section) {
+  if (section === 'balance') {
+    els.balanceData.style.display = 'flex';
+    els.balanceError.style.display = 'none';
+  }
+  if (section === 'transactions') {
+    els.transactionsData.style.display = 'block';
+    els.transactionsError.style.display = 'none';
+  }
+  if (section === 'tokens') {
+    els.tokensData.style.display = 'block';
+    els.tokensError.style.display = 'none';
+  }
+}
+
+// (Builders and Icons left unchanged)
 function createLucideIcon(pathDataArray, size = 14) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-  svg.setAttribute('width', size);
-  svg.setAttribute('height', size);
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('fill', 'none');
-  svg.setAttribute('stroke', 'currentColor');
-  svg.setAttribute('stroke-width', '2');
-  svg.setAttribute('stroke-linecap', 'round');
-  svg.setAttribute('stroke-linejoin', 'round');
-
+  svg.setAttribute('width', size); svg.setAttribute('height', size);
+  svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor'); svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'round'); svg.setAttribute('stroke-linejoin', 'round');
   pathDataArray.forEach(tag => {
     const el = document.createElementNS('http://www.w3.org/2000/svg', tag.name);
     Object.entries(tag.attrs).forEach(([k, v]) => el.setAttribute(k, v));
@@ -201,14 +255,11 @@ function createLucideIcon(pathDataArray, size = 14) {
 }
 
 function buildTransactionCard(tx, searchedAddress) {
-  const card = document.createElement('div');
-  card.className = 'transaction-card';
-  const header = document.createElement('div');
-  header.className = 'transaction-header';
+  const card = document.createElement('div'); card.className = 'transaction-card';
+  const header = document.createElement('div'); header.className = 'transaction-header';
 
   const direction = getDirection(tx, searchedAddress);
   let iconPaths, iconColorClass, labelText;
-
   if (direction === 'IN') {
     iconPaths = [{ name: 'path', attrs: { d: 'M17 7 7 17' } }, { name: 'path', attrs: { d: 'M17 17H7V7' } }];
     iconColorClass = 'tx-in'; labelText = 'IN';
@@ -222,63 +273,38 @@ function buildTransactionCard(tx, searchedAddress) {
 
   const badge = document.createElement('span');
   badge.className = `tx-badge ${iconColorClass}`;
-  badge.style.display = 'inline-flex';
-  badge.style.alignItems = 'center';
-  badge.style.gap = '4px';
-  badge.appendChild(createLucideIcon(iconPaths, 12));
-  badge.appendChild(document.createTextNode(labelText));
+  badge.style.display = 'inline-flex'; badge.style.alignItems = 'center'; badge.style.gap = '4px';
+  badge.appendChild(createLucideIcon(iconPaths, 12)); badge.appendChild(document.createTextNode(labelText));
 
   const status = document.createElement('span');
   status.className = `tx-status ${tx.successful ? 'status-success' : 'status-failed'}`;
   status.textContent = tx.successful ? 'Success' : 'Failed';
 
   const badgeWrapper = document.createElement('div');
-  badgeWrapper.style.display = 'flex';
-  badgeWrapper.style.gap = '8px';
-  badgeWrapper.appendChild(badge);
-  badgeWrapper.appendChild(status);
+  badgeWrapper.style.display = 'flex'; badgeWrapper.style.gap = '8px';
+  badgeWrapper.appendChild(badge); badgeWrapper.appendChild(status);
 
   const hashLink = document.createElement('a');
-  hashLink.className = 'transaction-hash';
-  hashLink.href = `https://etherscan.io/tx/${tx.tx_hash}`;
-  hashLink.target = '_blank';
-  hashLink.rel = 'noopener noreferrer';
-  hashLink.textContent = shortenHex(tx.tx_hash, 10, 8);
+  hashLink.className = 'transaction-hash'; hashLink.href = `https://etherscan.io/tx/${tx.tx_hash}`;
+  hashLink.target = '_blank'; hashLink.rel = 'noopener noreferrer'; hashLink.textContent = shortenHex(tx.tx_hash, 10, 8);
   hashLink.appendChild(createLucideIcon([{ name: 'path', attrs: { d: 'M15 3h6v6' } }, { name: 'path', attrs: { d: 'M10 14 21 3' } }, { name: 'path', attrs: { d: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' } }], 12));
   hashLink.style.marginLeft = 'auto';
 
-  header.appendChild(badgeWrapper);
-  header.appendChild(hashLink);
+  header.appendChild(badgeWrapper); header.appendChild(hashLink);
 
-  const detail = document.createElement('div');
-  detail.className = 'transaction-detail';
+  const detail = document.createElement('div'); detail.className = 'transaction-detail';
   detail.innerHTML = `<span class="from-to">${shortenHex(tx.from_address, 6, 4)}</span>
                       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 8px; opacity: 0.5;"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                       <span class="from-to">${shortenHex(tx.to_address, 6, 4)}</span>`;
 
-  const valueDetail = document.createElement('div');
-  valueDetail.className = 'transaction-detail';
-  const valueText = document.createElement('span');
-  valueText.className = 'transaction-value';
-  valueText.textContent = `${weiToEth(tx.value_wei, 6)} ETH`;
-  const gasText = document.createElement('span');
-  gasText.style.color = 'var(--text-muted)';
-  gasText.style.fontSize = '0.8rem';
-  gasText.textContent = `Gas: ${weiToEth(tx.fees_paid, 6)} ETH`;
-  valueDetail.appendChild(valueText);
-  valueDetail.appendChild(gasText);
+  const valueDetail = document.createElement('div'); valueDetail.className = 'transaction-detail';
+  const valueText = document.createElement('span'); valueText.className = 'transaction-value'; valueText.textContent = `${weiToEth(tx.value_wei, 6)} ETH`;
+  const gasText = document.createElement('span'); gasText.style.color = 'var(--text-muted)'; gasText.style.fontSize = '0.8rem'; gasText.textContent = `Gas: ${weiToEth(tx.fees_paid, 6)} ETH`;
+  valueDetail.appendChild(valueText); valueDetail.appendChild(gasText);
 
-  const dateDetail = document.createElement('div');
-  dateDetail.className = 'transaction-detail';
-  dateDetail.style.fontSize = '0.8rem';
-  dateDetail.style.opacity = '0.7';
-  dateDetail.textContent = formatDate(tx.block_signed_at);
+  const dateDetail = document.createElement('div'); dateDetail.className = 'transaction-detail'; dateDetail.style.fontSize = '0.8rem'; dateDetail.style.opacity = '0.7'; dateDetail.textContent = formatDate(tx.block_signed_at);
 
-  card.appendChild(header);
-  card.appendChild(detail);
-  card.appendChild(valueDetail);
-  card.appendChild(dateDetail);
-
+  card.appendChild(header); card.appendChild(detail); card.appendChild(valueDetail); card.appendChild(dateDetail);
   return card;
 }
 
@@ -288,8 +314,6 @@ export function showError(code) {
   els.errorMessage.style.display = 'flex';
   els.resultPlaceholder.style.display = 'none';
   els.resultContent.style.display = 'none';
-  els.balanceSkeleton.style.display = 'none';
-  els.transactionsSkeleton.style.display = 'none';
   els.realData.style.display = 'none';
   announce('Error: ' + message, els.errorLiveRegion);
 }
@@ -306,33 +330,20 @@ export function setThemeUI(theme) {
 }
 
 export function toast(message) {
-  const el = document.createElement('div');
-  el.className = 'toast';
-  el.textContent = message;
+  const el = document.createElement('div'); el.className = 'toast'; el.textContent = message;
   els.toastContainer.appendChild(el);
-  setTimeout(() => {
-    el.classList.add('fade-out');
-    setTimeout(() => el.remove(), 300);
-  }, 2000);
+  setTimeout(() => { el.classList.add('fade-out'); setTimeout(() => el.remove(), 300); }, 2000);
 }
 
 export function renderRecentSearches(list, onSelect, onClear) {
-  if (list.length === 0) {
-    els.recentSearchesContainer.style.display = 'none';
-    return;
-  }
+  if (list.length === 0) { els.recentSearchesContainer.style.display = 'none'; return; }
   els.recentSearchesContainer.style.display = 'flex';
   els.recentSearchesList.replaceChildren();
-
   list.forEach(address => {
     const btn = document.createElement('button');
-    btn.className = 'chip-btn';
-    btn.textContent = address.endsWith('.eth') ? address : shortenHex(address, 6, 4);
-    btn.title = address;
-    btn.addEventListener('click', () => onSelect(address));
-    els.recentSearchesList.appendChild(btn);
+    btn.className = 'chip-btn'; btn.textContent = address.endsWith('.eth') ? address : shortenHex(address, 6, 4); btn.title = address;
+    btn.addEventListener('click', () => onSelect(address)); els.recentSearchesList.appendChild(btn);
   });
-
   els.clearRecentBtn.replaceWith(els.clearRecentBtn.cloneNode(true));
   els.clearRecentBtn = document.getElementById('clearRecentBtn');
   els.clearRecentBtn.addEventListener('click', onClear);
@@ -343,20 +354,14 @@ export function renderExampleChips(addresses, onSelect) {
   els.exampleChipsContainer.replaceChildren();
   addresses.forEach(item => {
     const btn = document.createElement('button');
-    btn.className = 'chip-btn';
-    btn.textContent = item.label;
-    btn.title = item.address;
-    btn.addEventListener('click', () => onSelect(item.address));
-    els.exampleChipsContainer.appendChild(btn);
+    btn.className = 'chip-btn'; btn.textContent = item.label; btn.title = item.address;
+    btn.addEventListener('click', () => onSelect(item.address)); els.exampleChipsContainer.appendChild(btn);
   });
 }
 
 export function bindFilterButtons(onChange) {
   els.filterButtons.forEach((btn) => {
-    btn.addEventListener('click', () => {
-      setFilterUI(btn.dataset.filter);
-      onChange(btn.dataset.filter);
-    });
+    btn.addEventListener('click', () => { setFilterUI(btn.dataset.filter); onChange(btn.dataset.filter); });
   });
 }
 

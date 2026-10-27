@@ -65,32 +65,13 @@
                 </div>
 
                 <div class="result-content" id="resultContent" style="display: none;">
-                    <div id="balanceSkeleton" class="skeleton-balance" style="display: none;">
-                        <div class="balance-card">
-                            <div class="balance-item">
-                                <span class="balance-label">Balance (ETH)</span>
-                                <div class="balance-value shimmer" style="width: 150px; height: 40px;"></div>
-                            </div>
-                            <div class="balance-item">
-                                <span class="balance-label">USD Value</span>
-                                <div class="balance-value shimmer" style="width: 120px; height: 40px;"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="transactionsSkeleton" class="skeleton-transactions" style="display: none;">
-                        <div class="section-title">Transaction History</div>
-                        <div class="skeleton-item shimmer"></div>
-                        <div class="skeleton-item shimmer"></div>
-                        <div class="skeleton-item shimmer"></div>
-                    </div>
-
-                    <div id="realData" style="display: none;">
+                    
+                    <div id="realData">
                         <div class="result-header">
                             <span class="result-label">Wallet Address</span>
                             <div class="address-wrapper">
                                 <div style="flex: 1; display: flex; flex-direction: column;">
                                     <span class="result-address" id="walletAddress"></span>
-                                    <!-- NEW: Resolved address line -->
                                     <span id="resolvedAddressText" style="display: none; font-size: 0.85rem; color: var(--text-muted); font-family: 'Inter', monospace; margin-top: 4px;"></span>
                                 </div>
                                 <button class="copy-btn" id="copyBtn" title="Copy address" aria-label="Copy address">
@@ -98,8 +79,20 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="balance-section">
-                            <div class="balance-card">
+
+                        <!-- Independent Balance Section -->
+                        <div class="balance-section" style="position: relative;">
+                            <div id="balanceSkeleton" class="balance-card skeleton-balance" style="display: none;">
+                                <div class="balance-item">
+                                    <span class="balance-label">Balance (ETH)</span>
+                                    <div class="balance-value shimmer" style="width: 150px; height: 40px;"></div>
+                                </div>
+                                <div class="balance-item">
+                                    <span class="balance-label">USD Value</span>
+                                    <div class="balance-value shimmer" style="width: 120px; height: 40px;"></div>
+                                </div>
+                            </div>
+                            <div id="balanceData" class="balance-card" style="display: none;">
                                 <div class="balance-item">
                                     <span class="balance-label">Balance (ETH)</span>
                                     <div class="balance-value">
@@ -114,14 +107,32 @@
                                     </div>
                                 </div>
                             </div>
+                            <div id="balanceError" class="section-error" style="display: none;">
+                                <span id="balanceErrorText">Failed to load balance</span>
+                                <button class="retry-btn" id="balanceRetryBtn">Retry</button>
+                            </div>
                         </div>
 
-                        <div class="tokens-section" id="tokensSection" style="display: none;">
+                        <!-- Independent Tokens Section -->
+                        <div class="tokens-section" id="tokensSection" style="display: block; position: relative;">
                             <h3 class="section-title">Token Balances</h3>
-                            <div class="tokens-list" id="tokensList"></div>
+                            
+                            <div id="tokensSkeleton" class="skeleton-tokens" style="display: none;">
+                                <div class="skeleton-item shimmer" style="height: 60px;"></div>
+                            </div>
+                            
+                            <div id="tokensData" style="display: none;">
+                                <div class="tokens-list" id="tokensList"></div>
+                            </div>
+                            
+                            <div id="tokensError" class="section-error" style="display: none;">
+                                <span id="tokensErrorText">Failed to load tokens</span>
+                                <button class="retry-btn" id="tokensRetryBtn">Retry</button>
+                            </div>
                         </div>
 
-                        <div class="transactions-section">
+                        <!-- Independent Transactions Section -->
+                        <div class="transactions-section" style="position: relative;">
                             <h3 class="section-title">
                                 <span>Transaction History</span>
                                 <a href="#" id="etherscanLink" class="etherscan-link" target="_blank" rel="noopener noreferrer">
@@ -130,17 +141,28 @@
                                 </a>
                             </h3>
                             
-                            <div class="filter-group">
-                                <button class="filter-btn active" data-filter="all">All</button>
-                                <button class="filter-btn" data-filter="in">Incoming</button>
-                                <button class="filter-btn" data-filter="out">Outgoing</button>
+                            <div id="transactionsSkeleton" class="skeleton-transactions" style="display: none;">
+                                <div class="skeleton-item shimmer"></div>
+                                <div class="skeleton-item shimmer"></div>
+                                <div class="skeleton-item shimmer"></div>
                             </div>
 
-                            <div id="transactionsList" class="transactions-list"></div>
-                            <div id="transactionsEmpty" class="transactions-empty" style="display: none;">No transactions found for this address.</div>
-                            
-                            <div id="loadMoreContainer" style="display: none; text-align: center; margin-top: 16px;">
-                                <button id="loadMoreBtn" class="search-btn" style="width: 100%; border-radius: var(--radius-sm);">Load More</button>
+                            <div id="transactionsData" style="display: none;">
+                                <div class="filter-group">
+                                    <button class="filter-btn active" data-filter="all">All</button>
+                                    <button class="filter-btn" data-filter="in">Incoming</button>
+                                    <button class="filter-btn" data-filter="out">Outgoing</button>
+                                </div>
+                                <div id="transactionsList" class="transactions-list"></div>
+                                <div id="transactionsEmpty" class="transactions-empty" style="display: none;">No transactions found for this address.</div>
+                                <div id="loadMoreContainer" style="display: none; text-align: center; margin-top: 16px;">
+                                    <button id="loadMoreBtn" class="search-btn" style="width: 100%; border-radius: var(--radius-sm);">Load More</button>
+                                </div>
+                            </div>
+
+                            <div id="transactionsError" class="section-error" style="display: none;">
+                                <span id="transactionsErrorText">Failed to load transactions</span>
+                                <button class="retry-btn" id="transactionsRetryBtn">Retry</button>
                             </div>
                         </div>
                     </div>
