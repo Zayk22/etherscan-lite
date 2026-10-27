@@ -26,6 +26,11 @@ const els = {
   recentSearchesList: document.getElementById('recentSearchesList'),
   clearRecentBtn: document.getElementById('clearRecentBtn'),
   exampleChipsContainer: document.getElementById('exampleChipsContainer'),
+  tokensSection: document.getElementById('tokensSection'),
+  tokensList: document.getElementById('tokensList'),
+  filterButtons: document.querySelectorAll('.filter-btn'),
+  loadMoreBtn: document.getElementById('loadMoreBtn'),
+  loadMoreContainer: document.getElementById('loadMoreContainer'),
 };
 
 export function getAddressInput() {
@@ -64,7 +69,7 @@ export function setLoading(isLoading) {
   }
 }
 
-export function showResult({ address, ethWei, transactions, ethUsd, priceError }) {
+export function showResult({ address, ethWei, ethUsd, priceError, tokens }) {
   els.walletAddress.textContent = address;
   els.etherscanLink.href = `https://etherscan.io/address/${address}`;
 
@@ -77,15 +82,7 @@ export function showResult({ address, ethWei, transactions, ethUsd, priceError }
     els.usdAmount.textContent = ethToUsd(ethString, ethUsd);
   }
 
-  els.transactionsList.replaceChildren();
-  if (!transactions || transactions.length === 0) {
-    els.transactionsEmpty.style.display = 'block';
-  } else {
-    els.transactionsEmpty.style.display = 'none';
-    for (const tx of transactions) {
-      els.transactionsList.appendChild(buildTransactionCard(tx, address));
-    }
-  }
+  renderTokens(tokens || []);
 
   els.balanceSkeleton.style.display = 'none';
   els.transactionsSkeleton.style.display = 'none';
@@ -94,10 +91,92 @@ export function showResult({ address, ethWei, transactions, ethUsd, priceError }
   els.errorMessage.style.display = 'none';
   els.resultContent.style.display = 'block';
   
-  announce(`Balance: ${ethString} ETH. Loaded ${transactions ? transactions.length : 0} transactions.`, els.liveRegion);
+  announce(`Balance: ${ethString} ETH.`, els.liveRegion);
 }
 
-// Helper to create Lucide SVGs dynamically
+function renderTokens(tokens) {
+  if (!tokens || tokens.length === 0) {
+    els.tokensSection.style.display = 'none';
+    return;
+  }
+  els.tokensSection.style.display = 'block';
+  els.tokensList.replaceChildren();
+
+  // Show top 8 tokens only
+  const MAX_TOKENS = 8;
+  const displayTokens = tokens.slice(0, MAX_TOKENS);
+
+  displayTokens.forEach((token) => {
+    const row = document.createElement('div');
+    row.className = 'token-row';
+
+    const symbol = document.createElement('span');
+    symbol.className = 'token-symbol';
+    symbol.textContent = token.contract_ticker_symbol || '???';
+
+    const balance = document.createElement('span');
+    balance.className = 'token-balance';
+    balance.textContent = weiToEth(token.balance, token.contract_decimals || 18);
+
+    row.appendChild(symbol);
+    row.appendChild(balance);
+    els.tokensList.appendChild(row);
+  });
+
+  // If there are more than 8, show a message
+  if (tokens.length > MAX_TOKENS) {
+    const more = document.createElement('div');
+    more.className = 'token-more';
+    more.textContent = `+ ${tokens.length - MAX_TOKENS} more tokens not shown`;
+    els.tokensList.appendChild(more);
+  }
+}
+
+export function renderTransactions({ transactions, filter, address, hasMore }) {
+  const filtered = transactions.filter((tx) => {
+    if (filter === 'all') return true;
+    const dir = getDirection(tx, address);
+    if (filter === 'in') return dir === 'IN' || dir === 'SELF';
+    if (filter === 'out') return dir === 'OUT' || dir === 'SELF';
+    return true;
+  });
+
+  els.transactionsList.replaceChildren();
+  if (filtered.length === 0) {
+    els.transactionsEmpty.style.display = 'block';
+    els.transactionsEmpty.textContent = transactions.length === 0
+      ? 'No transactions found for this address.'
+      : 'No transactions match this filter.';
+  } else {
+    els.transactionsEmpty.style.display = 'none';
+    for (const tx of filtered) {
+      els.transactionsList.appendChild(buildTransactionCard(tx, address));
+    }
+  }
+
+  if (hasMore) {
+    els.loadMoreContainer.style.display = 'block';
+  } else {
+    els.loadMoreContainer.style.display = 'none';
+  }
+}
+
+export function setLoadMoreLoading(isLoading) {
+  if (isLoading) {
+    els.loadMoreBtn.disabled = true;
+    els.loadMoreBtn.textContent = 'Loading...';
+  } else {
+    els.loadMoreBtn.disabled = false;
+    els.loadMoreBtn.textContent = 'Load More';
+  }
+}
+
+export function setFilterUI(filter) {
+  els.filterButtons.forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.filter === filter);
+  });
+}
+
 function createLucideIcon(pathDataArray, size = 14) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
@@ -125,39 +204,29 @@ function buildTransactionCard(tx, searchedAddress) {
   const header = document.createElement('div');
   header.className = 'transaction-header';
 
-  // Direction logic & icon
   const direction = getDirection(tx, searchedAddress);
-  
-  let iconPaths;
-  let iconColorClass;
-  let labelText;
+  let iconPaths, iconColorClass, labelText;
 
   if (direction === 'IN') {
-    // ArrowDownLeft
     iconPaths = [
       { name: 'path', attrs: { d: 'M17 7 7 17' } },
       { name: 'path', attrs: { d: 'M17 17H7V7' } }
     ];
-    iconColorClass = 'tx-in';
-    labelText = 'IN';
+    iconColorClass = 'tx-in'; labelText = 'IN';
   } else if (direction === 'OUT') {
-    // ArrowUpRight
     iconPaths = [
       { name: 'path', attrs: { d: 'M7 7h10v10' } },
       { name: 'path', attrs: { d: 'M7 17 17 7' } }
     ];
-    iconColorClass = 'tx-out';
-    labelText = 'OUT';
+    iconColorClass = 'tx-out'; labelText = 'OUT';
   } else {
-    // ArrowLeftRight (SELF)
     iconPaths = [
       { name: 'path', attrs: { d: 'M8 3 4 7l4 4' } },
       { name: 'path', attrs: { d: 'M4 7h16' } },
       { name: 'path', attrs: { d: 'm16 21 4-4-4-4' } },
       { name: 'path', attrs: { d: 'M20 17H4' } }
     ];
-    iconColorClass = 'tx-self';
-    labelText = 'SELF';
+    iconColorClass = 'tx-self'; labelText = 'SELF';
   }
 
   const badge = document.createElement('span');
@@ -168,7 +237,6 @@ function buildTransactionCard(tx, searchedAddress) {
   badge.appendChild(createLucideIcon(iconPaths, 12));
   badge.appendChild(document.createTextNode(labelText));
 
-  // Status Badge
   const status = document.createElement('span');
   status.className = `tx-status ${tx.successful ? 'status-success' : 'status-failed'}`;
   status.textContent = tx.successful ? 'Success' : 'Failed';
@@ -179,49 +247,40 @@ function buildTransactionCard(tx, searchedAddress) {
   badgeWrapper.appendChild(badge);
   badgeWrapper.appendChild(status);
 
-  // Hash as Etherscan Link + Icon
   const hashLink = document.createElement('a');
   hashLink.className = 'transaction-hash';
   hashLink.href = `https://etherscan.io/tx/${tx.tx_hash}`;
   hashLink.target = '_blank';
   hashLink.rel = 'noopener noreferrer';
   hashLink.textContent = shortenHex(tx.tx_hash, 10, 8);
-  
-  // External link icon
   hashLink.appendChild(createLucideIcon([
     { name: 'path', attrs: { d: 'M15 3h6v6' } },
     { name: 'path', attrs: { d: 'M10 14 21 3' } },
     { name: 'path', attrs: { d: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' } }
   ], 12));
-  hashLink.style.marginLeft = 'auto'; 
+  hashLink.style.marginLeft = 'auto';
 
   header.appendChild(badgeWrapper);
   header.appendChild(hashLink);
 
-  // From / To row
   const detail = document.createElement('div');
   detail.className = 'transaction-detail';
-  detail.innerHTML = `<span class="from-to">${shortenHex(tx.from_address, 6, 4)}</span> 
+  detail.innerHTML = `<span class="from-to">${shortenHex(tx.from_address, 6, 4)}</span>
                       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin: 0 8px; opacity: 0.5;"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                       <span class="from-to">${shortenHex(tx.to_address, 6, 4)}</span>`;
 
-  // Value & Gas row
   const valueDetail = document.createElement('div');
   valueDetail.className = 'transaction-detail';
-  
   const valueText = document.createElement('span');
   valueText.className = 'transaction-value';
   valueText.textContent = `${weiToEth(tx.value_wei, 6)} ETH`;
-  
   const gasText = document.createElement('span');
   gasText.style.color = 'var(--text-muted)';
   gasText.style.fontSize = '0.8rem';
   gasText.textContent = `Gas: ${weiToEth(tx.fees_paid, 6)} ETH`;
-
   valueDetail.appendChild(valueText);
   valueDetail.appendChild(gasText);
 
-  // Date row
   const dateDetail = document.createElement('div');
   dateDetail.className = 'transaction-detail';
   dateDetail.style.fontSize = '0.8rem';
@@ -245,7 +304,6 @@ export function showError(code) {
   els.balanceSkeleton.style.display = 'none';
   els.transactionsSkeleton.style.display = 'none';
   els.realData.style.display = 'none';
-  
   announce('Error: ' + message, els.errorLiveRegion);
 }
 
@@ -253,10 +311,8 @@ export function setThemeUI(theme) {
   document.body.classList.toggle('dark', theme === 'dark');
   if (els.themeIcon) {
     if (theme === 'dark') {
-      // Sun Icon
       els.themeIcon.innerHTML = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>';
     } else {
-      // Moon Icon
       els.themeIcon.innerHTML = '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>';
     }
   }
@@ -306,6 +362,19 @@ export function renderExampleChips(addresses, onSelect) {
     btn.addEventListener('click', () => onSelect(item.address));
     els.exampleChipsContainer.appendChild(btn);
   });
+}
+
+export function bindFilterButtons(onChange) {
+  els.filterButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      setFilterUI(btn.dataset.filter);
+      onChange(btn.dataset.filter);
+    });
+  });
+}
+
+export function bindLoadMore(onClick) {
+  els.loadMoreBtn.addEventListener('click', onClick);
 }
 
 export const elements = els;

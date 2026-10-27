@@ -6,6 +6,11 @@ import {
   setAddressInput,
   setLoading, 
   showResult, 
+  renderTransactions,
+  setFilterUI,
+  bindFilterButtons,
+  bindLoadMore,
+  setLoadMoreLoading,
   showError, 
   setThemeUI, 
   toast,
@@ -16,7 +21,6 @@ import {
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 
-// Hardcoded example chips (you can change these later)
 const EXAMPLE_ADDRESSES = [
   { label: 'Vitalik', address: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045' },
   { label: 'Binance 14', address: '0x28C6c06298d514Db089934071355E5743bf21d60' },
@@ -24,6 +28,13 @@ const EXAMPLE_ADDRESSES = [
 ];
 
 let isFetching = false;
+let currentAddress = '';
+let currentEthWei = '0';
+let currentEthUsd = null;
+let currentTransactions = [];
+let currentPage = 0;
+let hasMore = false;
+let currentFilter = 'all';
 
 // ---- Theme ----
 function initTheme() {
@@ -57,14 +68,8 @@ async function handleSearch(overrideAddress = null) {
   if (isFetching) return;
 
   const address = overrideAddress || getAddressInput();
-  if (!address) {
-    showError('MISSING_ADDRESS');
-    return;
-  }
-  if (!ADDRESS_RE.test(address)) {
-    showError('INVALID_ADDRESS');
-    return;
-  }
+  if (!address) return showError('MISSING_ADDRESS');
+  if (!ADDRESS_RE.test(address)) return showError('INVALID_ADDRESS');
 
   // Update UI state and URL
   setAddressInput(address);
@@ -76,13 +81,21 @@ async function handleSearch(overrideAddress = null) {
   addRecentSearch(address);
   updateRecentUI();
 
+  // Reset state
+  currentAddress = address.toLowerCase();
+  currentPage = 0;
+  currentTransactions = [];
+  currentFilter = 'all';
+  hasMore = false;
+  setFilterUI('all');
+
   isFetching = true;
   setLoading(true);
 
   const [balanceResult, priceResult, txResult] = await Promise.allSettled([
     fetchBalance(address),
     fetchPrice(),
-    fetchTransactions(address, 10),
+    fetchTransactions(address, 10, 0),
   ]);
 
   isFetching = false;
@@ -94,15 +107,67 @@ async function handleSearch(overrideAddress = null) {
   }
 
   const balanceData = balanceResult.value;
-  const txData = txResult.status === 'fulfilled' ? txResult.value : { transactions: [] };
+  const txData = txResult.status === 'fulfilled' ? txResult.value : { transactions: [], hasMore: false };
   const priceData = priceResult.status === 'fulfilled' ? priceResult.value : null;
+
+  currentEthWei = balanceData.eth_wei;
+  currentEthUsd = priceData ? priceData.eth_usd : null;
+  currentTransactions = txData.transactions;
+  hasMore = txData.hasMore;
 
   showResult({
     address: balanceData.address,
-    ethWei: balanceData.eth_wei,
-    transactions: txData.transactions,
-    ethUsd: priceData ? priceData.eth_usd : null,
+    ethWei: currentEthWei,
+    ethUsd: currentEthUsd,
     priceError: priceData === null,
+    tokens: balanceData.tokens,
+  });
+
+  renderTransactions({
+    transactions: currentTransactions,
+    filter: currentFilter,
+    address: currentAddress,
+    hasMore: hasMore,
+  });
+}
+
+// ---- Load More ----
+async function handleLoadMore() {
+  if (isFetching || !hasMore) return;
+  
+  isFetching = true;
+  setLoadMoreLoading(true);
+
+  currentPage++;
+  
+  try {
+    const txData = await fetchTransactions(currentAddress, 10, currentPage);
+    currentTransactions = [...currentTransactions, ...txData.transactions];
+    hasMore = txData.hasMore;
+
+    renderTransactions({
+      transactions: currentTransactions,
+      filter: currentFilter,
+      address: currentAddress,
+      hasMore: hasMore,
+    });
+  } catch (err) {
+    toast('Failed to load more transactions');
+    currentPage--; // Revert page so retry works
+  } finally {
+    isFetching = false;
+    setLoadMoreLoading(false);
+  }
+}
+
+// ---- Filter ----
+function handleFilterChange(newFilter) {
+  currentFilter = newFilter;
+  renderTransactions({
+    transactions: currentTransactions,
+    filter: currentFilter,
+    address: currentAddress,
+    hasMore: hasMore,
   });
 }
 
@@ -142,8 +207,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter' && !isFetching) handleSearch();
   });
   elements.copyBtn.addEventListener('click', handleCopy);
-
   elements.addressInput.addEventListener('input', clearResults);
+
+  // Phase 4 bindings
+  bindFilterButtons(handleFilterChange);
+  bindLoadMore(handleLoadMore);
 
   // Load address from URL on page open
   const params = new URLSearchParams(window.location.search);

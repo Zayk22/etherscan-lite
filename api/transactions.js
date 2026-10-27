@@ -1,4 +1,4 @@
-// GET /api/transactions?address=0x...&limit=10
+// GET /api/transactions?address=0x...&limit=10&page=0
 
 import { validateAddress } from './_lib/validate.js';
 import { sendError, sendJson } from './_lib/http.js';
@@ -19,12 +19,11 @@ export default async function handler(req, res) {
   }
 
   let limit = parseInt(req.query && req.query.limit, 10);
-  if (!Number.isFinite(limit) || limit < 1) {
-    limit = DEFAULT_LIMIT;
-  }
-  if (limit > MAX_LIMIT) {
-    limit = MAX_LIMIT;
-  }
+  if (!Number.isFinite(limit) || limit < 1) limit = DEFAULT_LIMIT;
+  if (limit > MAX_LIMIT) limit = MAX_LIMIT;
+
+  let page = parseInt(req.query && req.query.page, 10);
+  if (!Number.isFinite(page) || page < 0) page = 0;
 
   const key = process.env.COVALENT_API_KEY;
   if (!key) {
@@ -33,7 +32,7 @@ export default async function handler(req, res) {
 
   const url =
     `${UPSTREAM}/${address}/transactions_v2/` +
-    `?key=${encodeURIComponent(key)}&limit=${limit}`;
+    `?key=${encodeURIComponent(key)}&limit=${limit}&page-number=${page}`;
 
   let upstream;
   try {
@@ -80,9 +79,14 @@ export default async function handler(req, res) {
     fees_paid: typeof tx.fees_paid === 'string' ? tx.fees_paid : '0',
   }));
 
+  // `has_more` tells the frontend whether to show the Load More button.
+  const hasMore = Boolean(body && body.data && body.data.pagination && body.data.pagination.has_more);
+
   return sendJson(res, 200, {
     ok: true,
     address: address.toLowerCase(),
     transactions,
+    page,
+    hasMore,
   });
 }

@@ -1,5 +1,3 @@
-// Thin wrapper around the serverless endpoints.
-
 async function getJson(url) {
   let response;
   try {
@@ -12,7 +10,7 @@ async function getJson(url) {
   try {
     body = await response.json();
   } catch {
-    // Ignore non-JSON responses
+    // Ignore non-JSON responses.
   }
 
   if (!response.ok) {
@@ -30,8 +28,6 @@ export async function fetchBalance(address) {
 }
 
 export async function fetchTransactions(address, limit = 10, page = 0) {
-  // Covalent uses page-number pagination via `page-number`.
-  // Vercel's proxy currently clamps `limit` and accepts `page`.
   return getJson(
     `/api/transactions?address=${encodeURIComponent(address)}&limit=${limit}&page=${page}`
   );
