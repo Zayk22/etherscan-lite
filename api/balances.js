@@ -1,5 +1,3 @@
-// GET /api/balances?address=0x...
-
 import { validateAddress } from './_lib/validate.js';
 import { sendError, sendJson } from './_lib/http.js';
 
@@ -21,11 +19,12 @@ export default async function handler(req, res) {
     return sendError(res, 500, 'MISSING_API_KEY');
   }
 
-  const url = `${UPSTREAM}/${address}/balances_v2/?key=${encodeURIComponent(key)}`;
+  const url = `${UPSTREAM}/${address}/balances_v2/?key=${encodeURIComponent(key)}&nft=false`;
 
   let upstream;
   try {
     upstream = await fetch(url, { 
+      // 8 seconds is fine now
       signal: AbortSignal.timeout(8000),
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
     });
@@ -36,12 +35,8 @@ export default async function handler(req, res) {
     return sendError(res, 502, 'NETWORK_ERROR');
   }
 
-  if (upstream.status === 429) {
-    return sendError(res, 429, 'RATE_LIMIT');
-  }
-  if (!upstream.ok) {
-    return sendError(res, 502, 'UPSTREAM_ERROR');
-  }
+  if (upstream.status === 429) return sendError(res, 429, 'RATE_LIMIT');
+  if (!upstream.ok) return sendError(res, 502, 'UPSTREAM_ERROR');
 
   let body;
   try {
@@ -63,6 +58,7 @@ export default async function handler(req, res) {
   );
   const ethWei = eth && typeof eth.balance === 'string' ? eth.balance : '0';
 
+  // Only return the top 50 tokens, sorted by balance, to stop huge payloads
   const tokens = items
     .filter(
       (item) =>
@@ -71,6 +67,7 @@ export default async function handler(req, res) {
         typeof item.balance === 'string' &&
         item.balance !== '0'
     )
+    .slice(0, 50)
     .map((item) => ({
       contract_address: item.contract_address,
       contract_ticker_symbol: item.contract_ticker_symbol,

@@ -35,13 +35,8 @@ const els = {
   loadMoreContainer: document.getElementById('loadMoreContainer'),
 };
 
-export function getAddressInput() {
-  return els.addressInput.value.trim();
-}
-
-export function setAddressInput(address) {
-  els.addressInput.value = address;
-}
+export function getAddressInput() { return els.addressInput.value.trim(); }
+export function setAddressInput(address) { els.addressInput.value = address; }
 
 export function clearResults() {
   if (els.resultContent.style.display === 'block') {
@@ -52,14 +47,11 @@ export function clearResults() {
   }
 }
 
-function announce(message, region) {
-  if (region) region.textContent = message;
-}
+function announce(message, region) { if (region) region.textContent = message; }
 
 export function setLoading(isLoading, message = 'Loading data...') {
   els.searchBtn.disabled = isLoading;
   els.searchBtn.classList.toggle('loading', isLoading);
-
   if (isLoading) {
     els.resultPlaceholder.style.display = 'none';
     els.errorMessage.style.display = 'none';
@@ -72,13 +64,12 @@ export function setLoading(isLoading, message = 'Loading data...') {
 }
 
 export function showResult({ address, ethName, ethWei, ethUsd, priceError, tokens }) {
-  // Setup Header
   if (ethName) {
     els.resolvedName.style.display = 'block';
     els.resolvedName.textContent = ethName;
     els.resolvedAddressText.style.display = 'block';
     els.resolvedAddressText.textContent = address;
-    els.walletAddress.textContent = ethName; // Keep primary bold text as the name
+    els.walletAddress.textContent = ethName;
   } else {
     els.resolvedName.style.display = 'none';
     els.resolvedAddressText.style.display = 'none';
@@ -87,13 +78,18 @@ export function showResult({ address, ethName, ethWei, ethUsd, priceError, token
 
   els.etherscanLink.href = `https://etherscan.io/address/${address}`;
 
-  const ethString = weiToEth(ethWei, 6);
-  els.balanceAmount.textContent = ethString;
-
-  if (priceError || ethUsd == null) {
-    els.usdAmount.textContent = 'Price unavailable';
+  if (priceError && ethWei === '0') {
+    // Balance failed or is too slow to load
+    els.balanceAmount.textContent = 'Unavailable';
+    els.usdAmount.textContent = 'Unavailable';
   } else {
-    els.usdAmount.textContent = ethToUsd(ethString, ethUsd);
+    const ethString = weiToEth(ethWei, 6);
+    els.balanceAmount.textContent = ethString;
+    if (priceError || ethUsd == null) {
+      els.usdAmount.textContent = 'Price unavailable';
+    } else {
+      els.usdAmount.textContent = ethToUsd(ethString, ethUsd);
+    }
   }
 
   renderTokens(tokens || []);
@@ -104,8 +100,6 @@ export function showResult({ address, ethName, ethWei, ethUsd, priceError, token
   els.resultPlaceholder.style.display = 'none';
   els.errorMessage.style.display = 'none';
   els.resultContent.style.display = 'block';
-  
-  announce(`Balance: ${ethString} ETH.`, els.liveRegion);
 }
 
 function renderTokens(tokens) {
@@ -122,15 +116,12 @@ function renderTokens(tokens) {
   displayTokens.forEach((token) => {
     const row = document.createElement('div');
     row.className = 'token-row';
-
     const symbol = document.createElement('span');
     symbol.className = 'token-symbol';
     symbol.textContent = token.contract_ticker_symbol || '???';
-
     const balance = document.createElement('span');
     balance.className = 'token-balance';
     balance.textContent = weiToEth(token.balance, token.contract_decimals || 18);
-
     row.appendChild(symbol);
     row.appendChild(balance);
     els.tokensList.appendChild(row);
@@ -212,7 +203,6 @@ function createLucideIcon(pathDataArray, size = 14) {
 function buildTransactionCard(tx, searchedAddress) {
   const card = document.createElement('div');
   card.className = 'transaction-card';
-
   const header = document.createElement('div');
   header.className = 'transaction-header';
 
@@ -226,12 +216,7 @@ function buildTransactionCard(tx, searchedAddress) {
     iconPaths = [{ name: 'path', attrs: { d: 'M7 7h10v10' } }, { name: 'path', attrs: { d: 'M7 17 17 7' } }];
     iconColorClass = 'tx-out'; labelText = 'OUT';
   } else {
-    iconPaths = [
-      { name: 'path', attrs: { d: 'M8 3 4 7l4 4' } },
-      { name: 'path', attrs: { d: 'M4 7h16' } },
-      { name: 'path', attrs: { d: 'm16 21 4-4-4-4' } },
-      { name: 'path', attrs: { d: 'M20 17H4' } }
-    ];
+    iconPaths = [{ name: 'path', attrs: { d: 'M8 3 4 7l4 4' } }, { name: 'path', attrs: { d: 'M4 7h16' } }, { name: 'path', attrs: { d: 'm16 21 4-4-4-4' } }, { name: 'path', attrs: { d: 'M20 17H4' } }];
     iconColorClass = 'tx-self'; labelText = 'SELF';
   }
 
@@ -259,11 +244,7 @@ function buildTransactionCard(tx, searchedAddress) {
   hashLink.target = '_blank';
   hashLink.rel = 'noopener noreferrer';
   hashLink.textContent = shortenHex(tx.tx_hash, 10, 8);
-  hashLink.appendChild(createLucideIcon([
-    { name: 'path', attrs: { d: 'M15 3h6v6' } },
-    { name: 'path', attrs: { d: 'M10 14 21 3' } },
-    { name: 'path', attrs: { d: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' } }
-  ], 12));
+  hashLink.appendChild(createLucideIcon([{ name: 'path', attrs: { d: 'M15 3h6v6' } }, { name: 'path', attrs: { d: 'M10 14 21 3' } }, { name: 'path', attrs: { d: 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' } }], 12));
   hashLink.style.marginLeft = 'auto';
 
   header.appendChild(badgeWrapper);

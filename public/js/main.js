@@ -63,7 +63,6 @@ function updateRecentUI() {
   );
 }
 
-// Helper to prevent any promise from hanging forever
 function withTimeout(promise, ms) {
   return Promise.race([
     promise,
@@ -80,20 +79,17 @@ async function handleSearch(overrideInput = null) {
   const isName = isEthName(input);
   const isAddress = ADDRESS_RE.test(input);
 
-  if (!isName && !isAddress) {
-    return showError('INVALID_ADDRESS');
-  }
+  if (!isName && !isAddress) return showError('INVALID_ADDRESS');
 
   setAddressInput(input);
   
   isFetching = true;
   let resolvedAddress = input;
 
-  // Step 1: Resolve .eth names
   if (isName) {
     setLoading(true, 'Resolving name...');
     try {
-      const resolveData = await fetchResolve(input);
+      const resolveData = await withTimeout(fetchResolve(input), 6000);
       resolvedAddress = resolveData.address;
       currentEthName = input.toLowerCase();
     } catch (err) {
@@ -105,7 +101,6 @@ async function handleSearch(overrideInput = null) {
     currentEthName = null;
   }
 
-  // Step 2: Save to recent & Update URL
   addRecentSearch(input);
   updateRecentUI();
   
@@ -113,7 +108,6 @@ async function handleSearch(overrideInput = null) {
   url.searchParams.set('address', input);
   window.history.replaceState({}, '', url);
 
-  // Reset state
   currentAddress = resolvedAddress.toLowerCase();
   currentPage = 0;
   currentTransactions = [];
@@ -123,37 +117,52 @@ async function handleSearch(overrideInput = null) {
 
   setLoading(true, 'Loading data...');
 
-  // Step 3: Fetch everything. We wrap transactions in a timeout so if it hangs, the page still loads.
-  const [balanceResult, priceResult, txResult] = await Promise.allSettled([
-    fetchBalance(currentAddress),
-    fetchPrice(),
-    withTimeout(fetchTransactions(currentAddress, 10, 0), 6000) // 6 second limit
-  ]);
+  // Fetch independently. If balance fails, transactions can still succeed.
+  let balanceData = null;
+  let txData = { transactions: [], hasMore: false };
+  let priceData = null;
+
+  try {
+    const results = await withTimeout(
+      Promise.allSettled([
+        fetchBalance(currentAddress),
+        fetchPrice(),
+        fetchTransactions(currentAddress, 10, 0)
+      ]), 
+      9000 // 9 seconds max total
+    );
+
+    if (results[0].status === 'fulfilled') balanceData = results[0].value;
+    if (results[1].status === 'fulfilled') priceData = results[1].value;
+    if (results[2].status === 'fulfilled') txData = results[2].value;
+
+  } catch (err) {
+    // If the whole thing times out, we might still have partial data, but usually we lose it all.
+    console.warn("Global fetch timeout reached.");
+  }
 
   isFetching = false;
   setLoading(false);
 
-  if (balanceResult.status === 'rejected') {
-    showError(balanceResult.reason.message || 'UNKNOWN_ERROR');
-    return;
+  // If BOTH balance and transactions failed, show the error.
+  if (!balanceData && txData.transactions.length === 0) {
+    return showError('TIMEOUT');
   }
 
-  const balanceData = balanceResult.value;
-  const txData = txResult.status === 'fulfilled' ? txResult.value : { transactions: [], hasMore: true };
-  const priceData = priceResult.status === 'fulfilled' ? priceResult.value : null;
-
-  currentEthWei = balanceData.eth_wei;
+  // Otherwise, show whatever we got.
+  currentEthWei = balanceData ? balanceData.eth_wei : '0';
   currentEthUsd = priceData ? priceData.eth_usd : null;
   currentTransactions = txData.transactions;
   hasMore = txData.hasMore;
 
+  // If balance failed, pass a flag so ui.js knows to show "Unavailable"
   showResult({
     address: currentAddress,
     ethName: currentEthName,
     ethWei: currentEthWei,
     ethUsd: currentEthUsd,
-    priceError: priceData === null,
-    tokens: balanceData.tokens,
+    priceError: priceData === null || !balanceData, 
+    tokens: balanceData ? balanceData.tokens : [],
   });
 
   renderTransactions({
@@ -172,7 +181,7 @@ async function handleLoadMore() {
   currentPage++;
   
   try {
-    const txData = await withTimeout(fetchTransactions(currentAddress, 10, currentPage), 6000);
+    const txData = await withTimeout(fetchTransactions(currentAddress, 10, currentPage), 8000);
     currentTransactions = [...currentTransactions, ...txData.transactions];
     hasMore = txData.hasMore;
 
