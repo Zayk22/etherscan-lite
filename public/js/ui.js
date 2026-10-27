@@ -25,10 +25,33 @@ const els = {
   themeToggle: document.getElementById('themeToggle'),
   themeIcon: document.querySelector('.theme-icon'),
   toastContainer: document.getElementById('toastContainer'),
+  // Aria live regions we will add to index.html
+  liveRegion: document.getElementById('liveRegion'),
+  errorLiveRegion: document.getElementById('errorLiveRegion'),
 };
 
 export function getAddressInput() {
   return els.addressInput.value.trim();
+}
+
+export function clearInput() {
+  els.addressInput.value = '';
+}
+
+// Show/hide the initial state when the user starts typing again
+export function clearResults() {
+  if (els.resultContent.style.display === 'block') {
+    els.resultContent.style.display = 'none';
+    els.resultPlaceholder.style.display = 'flex';
+    els.errorMessage.style.display = 'none';
+    announce('', els.liveRegion);
+  }
+}
+
+function announce(message, region) {
+  if (region) {
+    region.textContent = message;
+  }
 }
 
 export function setLoading(isLoading) {
@@ -42,6 +65,7 @@ export function setLoading(isLoading) {
     els.realData.style.display = 'none';
     els.balanceSkeleton.style.display = 'block';
     els.transactionsSkeleton.style.display = 'block';
+    announce('Loading data...', els.liveRegion);
   }
 }
 
@@ -79,6 +103,8 @@ export function showResult({ address, ethWei, transactions, ethUsd, priceError }
   els.resultPlaceholder.style.display = 'none';
   els.errorMessage.style.display = 'none';
   els.resultContent.style.display = 'block';
+  
+  announce(`Balance: ${ethString} ETH. Loaded ${transactions ? transactions.length : 0} transactions.`, els.liveRegion);
 }
 
 function buildTransactionCard(tx) {
@@ -122,13 +148,16 @@ function buildTransactionCard(tx) {
  * (or "UNKNOWN_ERROR").
  */
 export function showError(code) {
-  els.errorText.textContent = '❌ ' + errorMessage(code);
+  const message = errorMessage(code);
+  els.errorText.textContent = '❌ ' + message;
   els.errorMessage.style.display = 'flex';
   els.resultPlaceholder.style.display = 'none';
   els.resultContent.style.display = 'none';
   els.balanceSkeleton.style.display = 'none';
   els.transactionsSkeleton.style.display = 'none';
   els.realData.style.display = 'none';
+  
+  announce('Error: ' + message, els.errorLiveRegion);
 }
 
 export function setThemeUI(theme) {

@@ -2,9 +2,17 @@
 // Every call returns parsed JSON on success or throws an Error with
 // the server's error code on failure, so callers can use try/catch
 // consistently.
+// It also catches fetch-level network failures (e.g., if the server is down)
+// and normalizes them to 'NETWORK_ERROR'.
 
 async function getJson(url) {
-  const response = await fetch(url, { headers: { Accept: 'application/json' } });
+  let response;
+  try {
+    response = await fetch(url, { headers: { Accept: 'application/json' } });
+  } catch {
+    // Fetch itself threw — offline, DNS failure, or Vercel down.
+    throw new Error('NETWORK_ERROR');
+  }
 
   let body = null;
   try {
@@ -14,11 +22,11 @@ async function getJson(url) {
   }
 
   if (!response.ok) {
-    const code = body && typeof body.error === 'string' ? body.error : 'UNKNOWN_ERROR';
+    const code = body && typeof body.error === 'string' ? body.error : 'UPSTREAM_ERROR';
     throw new Error(code);
   }
   if (!body || body.ok !== true) {
-    throw new Error('UNKNOWN_ERROR');
+    throw new Error('UPSTREAM_ERROR');
   }
   return body;
 }

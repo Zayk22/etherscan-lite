@@ -1,17 +1,19 @@
 // main.js — the entry point. Wires the UI to the API and coordinates
 // the theme, search flow, and copy-address button.
-//
-// The three API calls (balance, price, transactions) are made with
-// Promise.allSettled so a failure in one does not block the others.
-// If price fails but balance and transactions succeed, we still show
-// the result with a "price unavailable" note.
 
 import { fetchBalance, fetchTransactions, fetchPrice } from './api.js';
 import { getSavedTheme, saveTheme } from './storage.js';
-import { elements, getAddressInput, setLoading, showResult, showError, setThemeUI, toast } from './ui.js';
+import { 
+  elements, 
+  getAddressInput, 
+  setLoading, 
+  showResult, 
+  showError, 
+  setThemeUI, 
+  toast,
+  clearResults
+} from './ui.js';
 
-// Simple client-side address check. The server also validates — this
-// just avoids a pointless round-trip when the input is obviously bad.
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 
 let isFetching = false;
@@ -81,7 +83,6 @@ async function handleCopy() {
     await navigator.clipboard.writeText(address);
     toast('✅ Address copied!');
   } catch {
-    // Fallback for browsers without clipboard API permission.
     const ta = document.createElement('textarea');
     ta.value = address;
     document.body.appendChild(ta);
@@ -109,11 +110,5 @@ document.addEventListener('DOMContentLoaded', () => {
   elements.addressInput.focus();
 
   // Clear stale results when the user starts typing a new address.
-  elements.addressInput.addEventListener('input', () => {
-    if (elements.resultContent.style.display === 'block') {
-      elements.resultContent.style.display = 'none';
-      elements.resultPlaceholder.style.display = 'flex';
-      elements.errorMessage.style.display = 'none';
-    }
-  });
+  elements.addressInput.addEventListener('input', clearResults);
 });
